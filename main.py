@@ -1,4 +1,4 @@
-from pymongo import MongoClient
+from pymongo import MongoClient, errors
 import logging
 import bcrypt
 
@@ -8,13 +8,23 @@ client = MongoClient("localhost", 27017)
 db = client['store_p2']
 cur_user = ""
 
-try:
-    db.create_collection('account')
-    db.create_collection('order')
-    db.create_collection('product')
-    logging.info("Collections successfully created")
-except Exception as e:
-    logging.error(f"Failed to create collections. Error: {e}", )
+
+def initialize_db():
+    try:
+        db.create_collection('account')
+        # todo comeback
+        # db["account"].create_index([("username", 1)], unique=True)
+        # db["account"].create_index([("password", 1)])
+        db.create_collection('order')
+
+        # todo drop the collection and make sure this works, set up pymongo exception 
+        db.create_collection('product')
+        db["product"].create_index([("user", 1)], unique=True)
+        db["product"].create_index([("price", 1)])
+
+        logging.info("Collections successfully created")
+    except Exception as e:
+        logging.error(f"Failed to create collections. Error: {e}", )
 
 
 def valid_input(input_str, options: set):
@@ -51,7 +61,7 @@ def register_account():
 
 
 def login():
-    nonlocal cur_user
+    global cur_user
 
     username = input("Enter Username: ")
     password = input("Enter Password: ")
@@ -66,7 +76,29 @@ def login():
 
 
 def edit_products():
-    valid_input("(1) Add (2) Update (3) Delete (4) Exit", {"1", "2", "3", "4"})
+    usr_input = valid_input("(1) Add (2) Update (3) Delete (4) Exit", {"1", "2", "3", "4"})
+    if usr_input == "1":
+        name = input("Product Name: ")
+        while True:
+            price = input("Product Price: ")
+            try:
+                price = float(price)
+                break
+            except ValueError:
+                print("Error price is not numeric.")
+        new_product = {"name": name, "price": price}
+        db["product"].insert_one(new_product)
+        logging.info(f"{cur_user} added {new_product}")
+
+    elif usr_input == "2":
+        pass
+    elif usr_input == "3":
+        pass
+    elif usr_input == "4":
+        pass
+    else:
+        raise Exception("Something broke")
+
 
 while True:
     input1 = valid_input("(1) Register (2) Login (3) Exit", {"1", "2", "3"})
@@ -81,24 +113,21 @@ while True:
         raise Exception("Something broke")
 
 
-# todo add user view
-# add logging
-
-# while True:
-    print(f"Welcome {cur_user}")
+print(f"Welcome {cur_user['username']}")
+while True:
     input2 = valid_input("(1) View Products (2) Edit Products (3) Make Order (4) View Orders", {"1", "2", "3", "4"})
 
-    if input1 == "1":
+    if input2 == "1":
         products = db["product"].find()
         for product in products:
             # todo format this
             print(product)
-    elif input1 == "2":
+    elif input2 == "2":
         edit_products()
 
-    elif input1 == "3":
+    elif input2 == "3":
         pass
-    elif input1 == "4":
+    elif input2 == "4":
         pass
     else:
         raise Exception("Something broke")
