@@ -93,38 +93,66 @@ def edit_products():
     elif usr_input == "2":
         pass
     elif usr_input == "3":
-        pass
+        delete_products()
     elif usr_input == "4":
         pass
     else:
         raise Exception("Something broke")
 
 
-while True:
-    input1 = valid_input("(1) Register (2) Login (3) Exit", {"1", "2", "3"})
-    if input1 == "1":
-        register_account()
-    elif input1 == "2":
-        login()
-        break
-    elif input1 == "3":
-        break
+def view_products():
+    products = db["product"].find()
+    for i, product in enumerate(products):
+        print(f"({i + 1}) {product['name']}: ${product['price']:.2f}")
+
+
+def delete_products():
+    products = list(db["product"].find())
+    if not products:
+        print("No products to delete.")
     else:
-        raise Exception("Something broke")
+        view_products()
+        valid_options = set(map(str, range(1, len(products) + 1)))
+        while True:
+            user_input = input("Select products to delete separated by commas (v1, v2, v3): ")
+            cleaned_input = set(item.strip() for item in user_input.split(","))
+            correct_input = True
+            product_ids_to_del = []
+
+            for idx, e in enumerate(cleaned_input):
+                if e not in valid_options:
+                    correct_input = False
+                    product_ids_to_del = []
+                    print("Invalid input.")
+                    break
+                else:
+                    product_ids_to_del.append(products[int(e) - 1]["_id"])
+            if correct_input:
+                result = db["product"].delete_many({"_id": {"$in": product_ids_to_del}})
+                print(f"{result.deleted_count} documents deleted.")
+                break
 
 
-print(f"Welcome {cur_user['username']}")
+# while True:
+#     input1 = valid_input("(1) Register (2) Login (3) Exit", {"1", "2", "3"})
+#     if input1 == "1":
+#         register_account()
+#     elif input1 == "2":
+#         login()
+#         break
+#     elif input1 == "3":
+#         break
+#     else:
+#         raise Exception("Something broke")
+
+# print(f"Welcome {cur_user['username']}")
 while True:
     input2 = valid_input("(1) View Products (2) Edit Products (3) Make Order (4) View Orders", {"1", "2", "3", "4"})
 
     if input2 == "1":
-        products = db["product"].find()
-        for product in products:
-            # todo format this
-            print(product)
+        view_products()
     elif input2 == "2":
         edit_products()
-
     elif input2 == "3":
         pass
     elif input2 == "4":
