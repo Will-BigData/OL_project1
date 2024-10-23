@@ -1,27 +1,24 @@
 from pymongo import MongoClient, errors
 import logging
 import bcrypt
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 client = MongoClient("localhost", 27017)
 
 db = client['store_p2']
 # todo enable cur_user
-cur_user = ""
+cur_user = None
 
 
 def initialize_db():
     try:
         db.create_collection('account')
         # todo comeback
-        # db["account"].create_index([("username", 1)], unique=True)
-        # db["account"].create_index([("password", 1)])
         db.create_collection('order')
 
         # todo drop the collection and make sure this works, set up pymongo exception 
         db.create_collection('product')
-        db["product"].create_index([("user", 1)], unique=True)
-        db["product"].create_index([("price", 1)])
 
         logging.info("Collections successfully created")
     except Exception as e:
@@ -43,25 +40,24 @@ def select_multiple(doc_arr, operation: str):
         user_input = input(f"Select products to {operation} separated by commas (v1, v2, v3): ")
         cleaned_input = set(item.strip() for item in user_input.split(","))
         correct_input = True
-        products_to_modify = []
+        selected_products = []
 
         for idx, e in enumerate(cleaned_input):
             if e not in valid_options:
                 correct_input = False
-                products_to_modify = []
+                selected_products = []
                 print("Invalid input.")
                 break
             else:
-                products_to_modify.append(doc_arr[int(e) - 1])
+                selected_products.append(doc_arr[int(e) - 1])
         if correct_input:
             if operation == "delete":
-                # todo make sure this works
-                ids = [product["_id"] for product in products_to_modify]
+                ids = [product["_id"] for product in selected_products]
                 result = db["product"].delete_many({"_id": {"$in": ids}})
                 print(f"{result.deleted_count} documents deleted.")
                 logging.info(f"\nDeleted product_ids = {ids}")
             elif operation == "update":
-                for product in products_to_modify:
+                for product in selected_products:
                     updated_product = {}
                     for field, value in product.items():
                         if field == "_id":
@@ -84,7 +80,12 @@ def select_multiple(doc_arr, operation: str):
 
                     db["product"].replace_one({"_id": product["_id"]}, updated_product)
                     logging.info(f"\nUpdated product with id: {updated_product['_id']}")
-
+            elif operation == "order":
+                new_order = {"account": cur_user, "items": selected_products, "timestamp": datetime.now()}
+                db["order"].insert_one(new_order)
+                logging.info(f"\nOrder placed: {new_order}")
+            else:
+                raise Exception("something broke")
         break
 
 
@@ -120,7 +121,6 @@ def login():
     user = db["account"].find_one({"username": username})
     if user:
         if bcrypt.checkpw(password.encode("utf-8"), user["password"]):
-            x = user["password"]
             cur_user = user
             print("Successfully logged in!")
         else:
@@ -177,6 +177,15 @@ def update_products():
         select_multiple(products, "update")
 
 
+def make_order():
+    products = list(db["product"].find())
+    if not products:
+        print("No products to order.")
+    else:
+        view_products()
+        select_multiple(products, "order")
+
+
 # while True:
 #     input1 = valid_input("(1) Register (2) Login (3) Exit", {"1", "2", "3"})
 #     if input1 == "1":
@@ -192,9 +201,16 @@ def update_products():
 # print(f"Welcome {cur_user['username']}")
 
 
-# order_id, [(product, amt)], account_id, timestamp
-def make_order():
-    view_products()
+def view_orders():
+    for i, order in enumerate(db["order"].find()):
+        print(f"({i + 1}) Order: {order['_id']} | Account: {order['account']} ")
+        print("-" * 20)
+        print("Products")
+        for j, item in enumerate(order["items"]):
+            print(f"     ({j + 1}) {item['name']} | ${item['price']:.2f}")
+        print("-" * 20)
+        print(f"Timestamp: {order['timestamp']}")
+        print()
 
 
 while True:
@@ -208,7 +224,7 @@ while True:
     elif input2 == "3":
         make_order()
     elif input2 == "4":
-        pass
+        view_orders()
     elif input2 == "5":
         break
     else:
