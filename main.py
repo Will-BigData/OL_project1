@@ -3,27 +3,44 @@ import logging
 import bcrypt
 from datetime import datetime
 
+from pymongo.errors import PyMongoError
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 client = MongoClient("localhost", 27017)
 
 db = client['store_p2']
-# todo enable cur_user
 cur_user = None
+
+
+# cur_user = {"role": "admin", "username": "The Admin", "timestamp": datetime.now()}
+# cur_user = {"role": "user", "username": "The non-admin", "timestamp": datetime.now()}
 
 
 def initialize_db():
     try:
         db.create_collection('account')
-        # todo comeback
+        db.account.create_index([('username', 1)], unique=True)
+        hashed_password = bcrypt.hashpw("admin".encode('utf-8'), bcrypt.gensalt())
+        db["account"].insert_one(
+            {"role": "admin", "username": "admin", "password": hashed_password, "timestamp": datetime.now()})
         db.create_collection('order')
 
-        # todo drop the collection and make sure this works, set up pymongo exception 
+        # todo drop the collection and make sure this works, set up pymongo exception
         db.create_collection('product')
 
-        logging.info("Collections successfully created")
-    except Exception as e:
-        logging.error(f"Failed to create collections. Error: {e}", )
+        logging.info("Collections successfully created.")
+    except PyMongoError as e:
+        logging.error(f"Failed to create collections. Error: {e}")
 
+
+def cleanup_collections():
+    try:
+        db.drop_collection('order')
+        db.drop_collection('account')
+        db.drop_collection('product')
+        logging.info("Collections successfully dropped.")
+    except PyMongoError as e:
+        logging.error(f"Failed to drop collections. Error: {e}")
 
 def valid_input(input_str, options: set):
     user_input = input(input_str)
@@ -110,7 +127,8 @@ def register_account():
             break
 
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    db["account"].insert_one({"username": username, "password": hashed_password, "admin": "user"})
+    db["account"].insert_one(
+        {"username": username, "password": hashed_password, "role": "user", "timestamp": datetime.now()})
 
 
 def login():
@@ -124,7 +142,9 @@ def login():
             cur_user = user
             print("Successfully logged in!")
         else:
-            print("Could not login")
+            print("Password or username is incorrect.")
+    else:
+        print("Password or username is incorrect.")
 
 
 def edit_products():
@@ -151,6 +171,31 @@ def edit_products():
             break
         else:
             raise Exception("Something broke")
+
+
+def update_accounts():
+    pass
+
+
+def delete_accounts():
+    pass
+
+
+def edit_accounts():
+    while True:
+        usr_input = valid_input("(1) Add (2) Update (3) Delete (4) Exit", {"1", "2", "3", "4"})
+        if usr_input == "1":
+            register_account()
+        elif usr_input == "2":
+            update_accounts()
+        elif usr_input == "3":
+            delete_accounts()
+        elif usr_input == "4":
+            break
+        else:
+            raise Exception("Something broke")
+
+
 
 
 def view_products():
@@ -186,46 +231,94 @@ def make_order():
         select_multiple(products, "order")
 
 
-# while True:
-#     input1 = valid_input("(1) Register (2) Login (3) Exit", {"1", "2", "3"})
-#     if input1 == "1":
-#         register_account()
-#     elif input1 == "2":
-#         login()
-#         break
-#     elif input1 == "3":
-#         break
-#     else:
-#         raise Exception("Something broke")
-
-# print(f"Welcome {cur_user['username']}")
-
-
-def view_orders():
-    for i, order in enumerate(db["order"].find()):
+def view_my_orders():
+    for i, order in enumerate(db["order"].find({"account": cur_user})):
         print(f"({i + 1}) Order: {order['_id']} | Account: {order['account']} ")
         print("-" * 20)
         print("Products")
         for j, item in enumerate(order["items"]):
-            print(f"     ({j + 1}) {item['name']} | ${item['price']:.2f}")
+            print(f"     ({j + 1}) {item['name']}: ${item['price']:.2f}")
         print("-" * 20)
         print(f"Timestamp: {order['timestamp']}")
         print()
 
 
-while True:
-    input2 = valid_input("(1) View Products (2) Edit Products (3) Make Order (4) View Orders (5) Exit "
-                         "Program", {"1", "2", "3", "4", "5"})
+def view_all_orders():
+    for i, order in enumerate(db["order"].find()):
+        print(f"({i + 1}) Order: {order['_id']} | Account: {order['account']} ")
+        print("-" * 20)
+        print("Products")
+        for j, item in enumerate(order["items"]):
+            print(f"     ({j + 1}) {item['name']}: ${item['price']:.2f}")
+        print("-" * 20)
+        print(f"Timestamp: {order['timestamp']}")
+        print()
 
-    if input2 == "1":
-        view_products()
-    elif input2 == "2":
-        edit_products()
-    elif input2 == "3":
-        make_order()
-    elif input2 == "4":
-        view_orders()
-    elif input2 == "5":
+
+def view_all_accounts():
+    print("Users:")
+    accounts = db["account"].find()
+    for i, account in enumerate(accounts):
+        print(f"({i + 1}) Username: {account['username']} - Created at: {account['timestamp']}")
+
+
+initialize_db()
+
+while True:
+    input1 = valid_input("(1) Register (2) Login (3) Exit", {"1", "2", "3"})
+    if input1 == "1":
+        register_account()
+    elif input1 == "2":
+        login()
+        if cur_user is not None:
+            break
+    elif input1 == "3":
         break
     else:
         raise Exception("Something broke")
+
+print(f"Welcome {cur_user['username']}")
+
+while True:
+    if cur_user["role"] == "user":
+        input2 = valid_input("(1) View Products (2) Make Order (3) View My Orders (4) Exit "
+                             "Program", {"1", "2", "3", "4"})
+
+        if input2 == "1":
+            view_products()
+        elif input2 == "2":
+            make_order()
+        elif input2 == "3":
+            view_my_orders()
+        elif input2 == "4":
+            break
+        else:
+            raise Exception("Something broke")
+
+
+    elif cur_user["role"] == "admin":
+        input2 = valid_input("(1) View Products (2) Edit Products (3) Make Order (4) View Orders (5) View All Orders "
+                             "(6) View All Accounts (7) Exit Program", {"1", "2", "3", "4", "5", "6", "7"})
+
+        if input2 == "1":
+            view_products()
+        elif input2 == "2":
+            edit_products()
+        elif input2 == "3":
+            make_order()
+        elif input2 == "4":
+            view_my_orders()
+        elif input2 == "5":
+            view_all_orders()
+        elif input2 == "6":
+            print("-" * 20)
+            view_all_accounts()
+            print("-" * 20)
+        elif input2 == "7":
+            break
+        else:
+            raise Exception("Something broke")
+    else:
+        raise Exception("Unknown role")
+
+# cleanup_collections()
