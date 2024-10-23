@@ -30,7 +30,7 @@ def initialize_db():
 
         logging.info("Collections successfully created.")
     except PyMongoError as e:
-        logging.error(f"Failed to create collections. Error: {e}")
+        logging.error(f"Error: {e}")
 
 
 def cleanup_collections():
@@ -40,7 +40,8 @@ def cleanup_collections():
         db.drop_collection('product')
         logging.info("Collections successfully dropped.")
     except PyMongoError as e:
-        logging.error(f"Failed to drop collections. Error: {e}")
+        logging.error(f" Error: {e}")
+
 
 def valid_input(input_str, options: set):
     user_input = input(input_str)
@@ -149,8 +150,10 @@ def login():
 
 def edit_products():
     while True:
-        usr_input = valid_input("(1) Add (2) Update (3) Delete (4) Exit", {"1", "2", "3", "4"})
+        usr_input = valid_input("(1) View All (2) Add (3) Update (4) Delete (5) Exit ", {"1", "2", "3", "4", "5"})
         if usr_input == "1":
+            view_products()
+        elif usr_input == "2":
             name = input("Product Name: ")
             while True:
                 price = input("Product Price: ")
@@ -163,11 +166,11 @@ def edit_products():
             db["product"].insert_one(new_product)
             logging.info(f"\n {cur_user} added {new_product}")
 
-        elif usr_input == "2":
-            update_products()
         elif usr_input == "3":
-            delete_products()
+            update_products()
         elif usr_input == "4":
+            delete_products()
+        elif usr_input == "5":
             break
         else:
             raise Exception("Something broke")
@@ -183,19 +186,19 @@ def delete_accounts():
 
 def edit_accounts():
     while True:
-        usr_input = valid_input("(1) Add (2) Update (3) Delete (4) Exit", {"1", "2", "3", "4"})
+        usr_input = valid_input("(1) View All (2) Add (3) Update (4) Delete (5) Exit ", {"1", "2", "3", "4", "5"})
         if usr_input == "1":
-            register_account()
+            view_all_accounts()
         elif usr_input == "2":
-            update_accounts()
+            register_account()
         elif usr_input == "3":
-            delete_accounts()
+            update_accounts()
         elif usr_input == "4":
+            delete_accounts()
+        elif usr_input == "5":
             break
         else:
             raise Exception("Something broke")
-
-
 
 
 def view_products():
@@ -256,10 +259,12 @@ def view_all_orders():
 
 
 def view_all_accounts():
+    print("-" * 20)
     print("Users:")
     accounts = db["account"].find()
     for i, account in enumerate(accounts):
         print(f"({i + 1}) Username: {account['username']} - Created at: {account['timestamp']}")
+    print("-" * 20)
 
 
 initialize_db()
@@ -298,7 +303,8 @@ while True:
 
     elif cur_user["role"] == "admin":
         input2 = valid_input("(1) View Products (2) Edit Products (3) Make Order (4) View Orders (5) View All Orders "
-                             "(6) View All Accounts (7) Exit Program", {"1", "2", "3", "4", "5", "6", "7"})
+                             "(6) View All Accounts (7) Edit Accounts (8) Exit Program",
+                             {"1", "2", "3", "4", "5", "6", "7"})
 
         if input2 == "1":
             view_products()
@@ -311,10 +317,10 @@ while True:
         elif input2 == "5":
             view_all_orders()
         elif input2 == "6":
-            print("-" * 20)
             view_all_accounts()
-            print("-" * 20)
         elif input2 == "7":
+            edit_accounts()
+        elif input2 == "i":
             break
         else:
             raise Exception("Something broke")
