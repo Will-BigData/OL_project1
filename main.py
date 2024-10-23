@@ -6,6 +6,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 client = MongoClient("localhost", 27017)
 
 db = client['store_p2']
+# todo enable cur_user
 cur_user = ""
 
 
@@ -34,6 +35,57 @@ def valid_input(input_str, options: set):
         user_input = input(input_str)
 
     return user_input
+
+
+def select_multiple(doc_arr, operation: str):
+    valid_options = set(map(str, range(1, len(doc_arr) + 1)))
+    while True:
+        user_input = input(f"Select products to {operation} separated by commas (v1, v2, v3): ")
+        cleaned_input = set(item.strip() for item in user_input.split(","))
+        correct_input = True
+        products_to_modify = []
+
+        for idx, e in enumerate(cleaned_input):
+            if e not in valid_options:
+                correct_input = False
+                products_to_modify = []
+                print("Invalid input.")
+                break
+            else:
+                products_to_modify.append(doc_arr[int(e) - 1])
+        if correct_input:
+            if operation == "delete":
+                # todo make sure this works
+                ids = [product["_id"] for product in products_to_modify]
+                result = db["product"].delete_many({"_id": {"$in": ids}})
+                print(f"{result.deleted_count} documents deleted.")
+                logging.info(f"\nDeleted product_ids = {ids}")
+            elif operation == "update":
+                for product in products_to_modify:
+                    updated_product = {}
+                    for field, value in product.items():
+                        if field == "_id":
+                            updated_product[field] = value
+                        elif field == "price":  # any float
+                            while True:
+                                print(f"Current {field}: {value}; New {field}: ")
+                                new_val = input()
+                                try:
+                                    new_val = float(new_val)
+                                    updated_product[field] = new_val
+                                    break
+                                except ValueError:
+                                    print(f"Error input is not numeric.")
+
+                        else:
+                            print(f"Current {field}: {value}; New {field}: ")
+                            new_val = input()
+                            updated_product[field] = new_val
+
+                    db["product"].replace_one({"_id": product["_id"]}, updated_product)
+                    logging.info(f"\nUpdated product with id: {updated_product['_id']}")
+
+        break
 
 
 def register_account():
@@ -89,7 +141,7 @@ def edit_products():
                     print("Error price is not numeric.")
             new_product = {"name": name, "price": price}
             db["product"].insert_one(new_product)
-            logging.info(f"{cur_user} added {new_product}")
+            logging.info(f"\n {cur_user} added {new_product}")
 
         elif usr_input == "2":
             update_products()
@@ -113,26 +165,7 @@ def delete_products():
         print("No products to delete.")
     else:
         view_products()
-        valid_options = set(map(str, range(1, len(products) + 1)))
-        while True:
-            user_input = input("Select products to delete separated by commas (v1, v2, v3): ")
-            cleaned_input = set(item.strip() for item in user_input.split(","))
-            correct_input = True
-            product_ids_to_del = []
-
-            for idx, e in enumerate(cleaned_input):
-                if e not in valid_options:
-                    correct_input = False
-                    product_ids_to_del = []
-                    print("Invalid input.")
-                    break
-                else:
-                    product_ids_to_del.append(products[int(e) - 1]["_id"])
-            if correct_input:
-                result = db["product"].delete_many({"_id": {"$in": product_ids_to_del}})
-                print(f"{result.deleted_count} documents deleted.")
-                logging.info(f"Deleted product_ids = {product_ids_to_del}")
-                break
+        select_multiple(products, "delete")
 
 
 def update_products():
@@ -141,47 +174,7 @@ def update_products():
         print("No products to update.")
     else:
         view_products()
-        valid_options = set(map(str, range(1, len(products) + 1)))
-        while True:
-            user_input = input("Select products to update separated by commas (v1, v2, v3): ")
-            cleaned_input = set(item.strip() for item in user_input.split(","))
-            correct_input = True
-            products_to_update = []
-
-            for idx, e in enumerate(cleaned_input):
-                if e not in valid_options:
-                    correct_input = False
-                    products_to_update = []
-                    print("Invalid input.")
-                    break
-                else:
-                    products_to_update.append(products[int(e) - 1])
-            if correct_input:
-                for product in products_to_update:
-                    updated_product = {}
-                    for field, value in product.items():
-                        if field == "_id":
-                            updated_product[field] = value
-                        elif field == "price":  # any float
-                            while True:
-                                print(f"Current {field}: {value}; New {field}: ")
-                                new_val = input()
-                                try:
-                                    new_val = float(new_val)
-                                    updated_product[field] = new_val
-                                    break
-                                except ValueError:
-                                    print(f"Error input is not numeric.")
-
-                        else:
-                            print(f"Current {field}: {value}; New {field}: ")
-                            new_val = input()
-                            updated_product[field] = new_val
-
-                    db["product"].replace_one({"_id": product["_id"]}, updated_product)
-                    logging.info(f"\nUpdated product with id: {updated_product['_id']}")
-                break
-
+        select_multiple(products, "update")
 
 
 # while True:
@@ -197,6 +190,13 @@ def update_products():
 #         raise Exception("Something broke")
 
 # print(f"Welcome {cur_user['username']}")
+
+
+# order_id, [(product, amt)], account_id, timestamp
+def make_order():
+    view_products()
+
+
 while True:
     input2 = valid_input("(1) View Products (2) Edit Products (3) Make Order (4) View Orders (5) Exit "
                          "Program", {"1", "2", "3", "4", "5"})
@@ -206,7 +206,7 @@ while True:
     elif input2 == "2":
         edit_products()
     elif input2 == "3":
-        pass
+        make_order()
     elif input2 == "4":
         pass
     elif input2 == "5":
